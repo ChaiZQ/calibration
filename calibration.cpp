@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <iostream>
 
 using namespace cv;
 using namespace std;
@@ -259,7 +260,10 @@ static bool readStringList( const string& filename, vector<string>& l )
         l.push_back((string)*it);
     return true;
 }
+void modifyExtrinsics(vector<cv::Mat> rvec,vector<cv::Mat> tvec,vector<int> index)
+{
 
+}
 
 static bool runAndSave(const string& outputFilename,
                 const vector<vector<Point2f> >& imagePoints,
@@ -289,10 +293,67 @@ static bool runAndSave(const string& outputFilename,
                          totalAvgErr );
     return ok;
 }
-
+struct Origin
+{
+	cv::Mat img;
+	cv::Point2f p;
+	Origin(cv::Mat img):img(img){};
+};
+void on_mouse(int event,int x,int y,int flags,void* ustc)//event鼠标事件代号，x,y鼠标坐标，flags拖拽和键盘操作的代号,ustc: user parameter 
+{  
+	Mat tmp;
+	static Point pre_pt(-1,-1);//初始坐标  
+	static Point cur_pt(-1,-1);//实时坐标  
+	Mat img0 = ((Origin*)ustc)->img;
+	Point2f Mouse_origin;
+	string temp;  
+	if (event == CV_EVENT_LBUTTONDOWN)//左键按下，读取初始坐标，并在图像上该点处划圆  
+	{  
+		//org.copyTo(img);//将原始图片复制到img中  
+		stringstream x_s, y_s;
+		x_s << x;
+		y_s << y;
+		pre_pt = Point(x,y);  
+		putText(img0,temp,pre_pt,FONT_HERSHEY_SIMPLEX,0.5,Scalar(0,0,255),1,8);//在窗口上显示坐标  
+		circle(img0,pre_pt,2,Scalar(255,0,0),CV_FILLED,CV_AA,0);//划圆  
+		Mouse_origin = pre_pt;
+		((Origin*)ustc)->p = pre_pt;
+		imshow("Image View",img0);  	
+	}  
+	else if (event == CV_EVENT_MOUSEMOVE && !(flags & CV_EVENT_FLAG_LBUTTON))//左键没有按下的情况下鼠标移动的处理函数  
+	{  
+		img0.copyTo(tmp);//将img复制到临时图像tmp上，用于显示实时坐标  
+		stringstream x_s, y_s;
+		x_s << x;
+		y_s << y;
+		temp = "(" + x_s.str() + "," + y_s.str() + ")";
+		cur_pt = Point(x,y);  
+		putText(tmp,temp,cur_pt,FONT_HERSHEY_SIMPLEX,0.5,Scalar(0,0,255));//只是实时显示鼠标移动的坐标  
+		imshow("Image View",tmp);  
+	}  
+	else if (event == CV_EVENT_RBUTTONDOWN)
+		{ 
+			cvDestroyWindow("Image View");		
+			return;
+		}
+}
+int getClosestIndex(const vector<int>& cornerIndex,const vector<cv::Point2f>& pointBuf,const cv::Point2f& Origin)
+{
+	CV_Assert(cornerIndex.size() == 4);
+	int res = 0;
+	double closestDistance = cv::norm(pointBuf[cornerIndex[0]] - Origin);
+	for(int i = 0; i < 4; i++){
+		if(cv::norm(pointBuf[cornerIndex[i]] - Origin) < closestDistance){
+			closestDistance = cv::norm(pointBuf[cornerIndex[i]] - Origin);
+			res = i;
+	  }
+   }
+   return res;
+}
 
 int main( int argc, char** argv )
 {
+    
     Size boardSize, imageSize;
     float squareSize = 1.f, aspectRatio = 1.f;
     Mat cameraMatrix, distCoeffs;
@@ -314,6 +375,8 @@ int main( int argc, char** argv )
     vector<vector<Point2f> > imagePoints;
     vector<string> imageList;
     Pattern pattern = CHESSBOARD;
+    vector<int> failedIndex;
+    int currentIndex = 0;
 
     if( argc < 2 )
     {
@@ -444,7 +507,6 @@ int main( int argc, char** argv )
         }
         else if( i < (int)imageList.size() )
             view = imread(imageList[i], 1);
-
         if(!view.data)
         {
             if( imagePoints.size() > 0 )
@@ -452,9 +514,14 @@ int main( int argc, char** argv )
                            boardSize, pattern, squareSize, aspectRatio,
                            flags, cameraMatrix, distCoeffs,
                            writeExtrinsics, writePoints);
+            for(auto fi:failedIndex){
+            	cout << fi << endl;
+            }
             break;
         }
-
+        else{
+        	currentIndex++;
+        }
         imageSize = view.size();
 
         if( flipVertical )
@@ -464,21 +531,8 @@ int main( int argc, char** argv )
         cvtColor(view, viewGray, COLOR_BGR2GRAY);
 
         bool found;
-        switch( pattern )
-        {
-            case CHESSBOARD:
-                found = findChessboardCorners( view, boardSize, pointbuf,
+        found = findChessboardCorners( view, boardSize, pointbuf,
                     CV_CALIB_CB_ADAPTIVE_THRESH | CV_CALIB_CB_FAST_CHECK | CV_CALIB_CB_NORMALIZE_IMAGE);
-                break;
-            case CIRCLES_GRID:
-                found = findCirclesGrid( view, boardSize, pointbuf );
-                break;
-            case ASYMMETRIC_CIRCLES_GRID:
-                found = findCirclesGrid( view, boardSize, pointbuf, CALIB_CB_ASYMMETRIC_GRID );
-                break;
-            default:
-                return fprintf( stderr, "Unknown pattern type\n" ), -1;
-        }
 
        // improve the found corners' coordinate accuracy
         if( pattern == CHESSBOARD && found) cornerSubPix( viewGray, pointbuf, Size(11,11),
@@ -494,7 +548,9 @@ int main( int argc, char** argv )
 
         if(found)
             drawChessboardCorners( view, boardSize, Mat(pointbuf), found );
-
+        else{
+        	failedIndex.push_back(currentIndex);
+        }
         string msg = mode == CAPTURING ? "100/100" :
             mode == CALIBRATED ? "Calibrated" : "Press 'g' to start";
         int baseLine = 0;
@@ -520,9 +576,32 @@ int main( int argc, char** argv )
             Mat temp = view.clone();
             undistort(temp, view, cameraMatrix, distCoeffs);
         }
-
+        Origin o(view);
         imshow("Image View", view);
+        setMouseCallback("Image View",on_mouse,&o);
         cv::waitKey();
+
+        //---------------get (u,v) of four outer corners------------------------------
+        // int cornerIndex_1 = 0;
+        // int cornerIndex_2 = 0 + boardSize.width - 1;
+        // int cornerIndex_3 = 0 + boardSize.width * (boardSize.height-1);
+        // int cornerIndex_4 = boardSize.width * boardSize.height - 1;
+        vector<int> cornerIndex;
+        cornerIndex.push_back(0);cornerIndex.push_back(0 + boardSize.width - 1);
+        cornerIndex.push_back(0 + boardSize.width * (boardSize.height-1));
+        cornerIndex.push_back(boardSize.width * boardSize.height - 1);
+        
+        if(found){
+        	int closestIndex = getClosestIndex(cornerIndex,pointbuf,o.p);
+        	cout << "num of corners  " << pointbuf.size() << endl;
+        	cout << "original  " << pointbuf[0] << endl;
+        	cout << "modified  " << o.p << endl;
+        	cout << "closest index  " << closestIndex << endl;
+        }
+        else{
+        	cout << "failed to detect corners" << endl;
+        }
+
         
         int key = 0xff & waitKey(capture.isOpened() ? 50 : 500);
 
@@ -551,27 +630,5 @@ int main( int argc, char** argv )
                 break;
         }
     }
-
-    if( !capture.isOpened() && showUndistorted )
-    {
-        Mat view, rview, map1, map2;
-        initUndistortRectifyMap(cameraMatrix, distCoeffs, Mat(),
-                                getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, imageSize, 1, imageSize, 0),
-                                imageSize, CV_16SC2, map1, map2);
-
-        for( i = 0; i < (int)imageList.size(); i++ )
-        {
-            view = imread(imageList[i], 1);
-            if(!view.data)
-                continue;
-            //undistort( view, rview, cameraMatrix, distCoeffs, cameraMatrix );
-            remap(view, rview, map1, map2, INTER_LINEAR);
-            imshow("Image View", rview);
-            int c = 0xff & waitKey();
-            if( (c & 255) == 27 || c == 'q' || c == 'Q' )
-                break;
-        }
-    }
-
     return 0;
 }
