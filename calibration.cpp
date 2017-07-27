@@ -300,7 +300,7 @@ int main( int argc, char** argv )
     const char* inputFilename = 0;
 
     int i, nframes = 10;
-    bool writeExtrinsics = false, writePoints = false;
+    bool writeExtrinsics = true, writePoints = true;
     bool undistortImage = false;
     int flags = 0;
     VideoCapture capture;
@@ -522,6 +522,8 @@ int main( int argc, char** argv )
         }
 
         imshow("Image View", view);
+        cv::waitKey();
+        
         int key = 0xff & waitKey(capture.isOpened() ? 50 : 500);
 
         if( (key & 255) == 27 )
