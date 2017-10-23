@@ -301,7 +301,14 @@ void homo2vector(Mat& translation, Mat& rotation, const Mat homo)
     translation.at<double>(2) = homo.at<double>(2,3);
 }
 
-Mat ex_matrix(Mat rotation, Mat translation, int originIndex)
+////get extrinsic para for camera
+/// @param  rotation        original rotation    vec 3*1
+/// @param  translation     original translation vec 3*1
+/// @param  originIndex     index of origin relative to the true fixed origin
+/// @param  chessboardSize  size of chessboard  mm
+/// @param  w               width of chessboard  
+/// @param  h               height of chessboard  
+Mat ex_matrix(Mat rotation, Mat translation, int originIndex,float chessboardSize,int w,int h)
 {
     Mat homo = (Mat_<double>(4,4) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0,0,0,0); //返回齐次变换矩阵
     Mat t1 = (Mat_<double>(4,4) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0,0,0,0);
@@ -310,9 +317,9 @@ Mat ex_matrix(Mat rotation, Mat translation, int originIndex)
     Mat rot1 = (Mat_<double>(3,1) << 0, 0, -CV_PI /2);
     Mat rot2 = (Mat_<double>(3,1) << 0, 0, CV_PI /2);
     Mat rot3 = (Mat_<double>(3,1) << 0, 0, CV_PI );
-    Mat translation1 = (Mat_<double>(3,1) << 0, 200, 0);
-    Mat translation2 = (Mat_<double>(3,1) << 200, 0, 0);
-    Mat translation3 = (Mat_<double>(3,1) << 200, 200, 0);
+    Mat translation1 = (Mat_<double>(3,1) << (w-1)*chessboardSize, 0, 0);  //
+    Mat translation2 = (Mat_<double>(3,1) << 0, (h-1)*chessboardSize, 0);
+    Mat translation3 = (Mat_<double>(3,1) << (w-1)*chessboardSize, (h-1)*chessboardSize, 0);
 
     homoTrans(translation1,rot1,t1);
     homoTrans(translation2,rot2,t2);
@@ -338,23 +345,17 @@ Mat ex_matrix(Mat rotation, Mat translation, int originIndex)
     return homo;
 }
 
-void modifyExtrinsics(vector<cv::Mat>& rvec,vector<cv::Mat>& tvec,vector<int> index)
+void modifyExtrinsics(vector<cv::Mat>& rvec,vector<cv::Mat>& tvec,vector<int> index,float chessboardSize,int w,int h)
 {
-    // for (int ImageNum = 0;ImageNum < NumOfimage - failedIndex.size() ;ImageNum++)
-    //  {
-    //     /*if(find(ImageNum,failedIndex ))
-    //         continue;*/
-
-    //     Mat ex_rot = (Mat_<double>(3,1) << 0, 0, 0);  //转换后的外参矩阵，旋转部分
-    //     Mat ex_tr = (Mat_<double>(3,1) << 0, 0, 0);   //转换后的外参矩阵，平移部分
-
-    //     homo2vector(ex_tr, ex_rot ,ex_matrix(cameraParams.rotations[ImageNum],cameraParams.translations[ImageNum],origin[ImageNum]));
-    
-    //     //转换外参数矩阵
-    //     cameraParams.rotations[ImageNum] = ex_rot;
-    //     cameraParams.translations[ImageNum] = ex_tr;
-        
-    //  }
+    CV_Assert(rvec.size() == tvec.size() && rvec.size() == index.size());
+    for (int ImageNum = 0;ImageNum < rvec.size() ;ImageNum++)
+    {
+        Mat ex_rot = (Mat_<double>(3,1) << 0, 0, 0);  //转换后的外参矩阵，旋转部分
+        Mat ex_tr = (Mat_<double>(3,1) << 0, 0, 0);   //转换后的外参矩阵，平移部分
+        homo2vector(ex_tr, ex_rot ,ex_matrix(rvec[ImageNum],tvec[ImageNum],index[ImageNum],chessboardSize,w,h));
+        rvec[ImageNum] = ex_rot.clone();
+        tvec[ImageNum] = ex_tr.clone();
+    }
 }
 
 static bool runAndSave(const string& outputFilename,
@@ -370,7 +371,11 @@ static bool runAndSave(const string& outputFilename,
     bool ok = runCalibration(imagePoints, imageSize, boardSize, patternType, squareSize,
                    aspectRatio, flags, cameraMatrix, distCoeffs,
                    rvecs, tvecs, reprojErrs, totalAvgErr);
-    cout << "corner index size: " << cornerIndex.size() << endl;
+    cout << "corner index size:  " << cornerIndex.size() << endl;
+    cout << "board size:  " << boardSize.width << "      " << boardSize.height << endl;
+    cout << "squareSize:  " << squareSize << endl;
+    modifyExtrinsics(rvecs,tvecs,cornerIndex,squareSize,boardSize.width,boardSize.height);
+
     printf("%s. avg reprojection error = %.2f\n",
            ok ? "Calibration succeeded" : "Calibration failed",
            totalAvgErr);
@@ -671,10 +676,6 @@ int main( int argc, char** argv )
         cv::waitKey();
 
         //---------------get (u,v) of four outer corners------------------------------
-        // int cornerIndex_1 = 0;
-        // int cornerIndex_2 = 0 + boardSize.width - 1;
-        // int cornerIndex_3 = 0 + boardSize.width * (boardSize.height-1);
-        // int cornerIndex_4 = boardSize.width * boardSize.height - 1;
         vector<int> cornerIndex;
         cornerIndex.push_back(0);cornerIndex.push_back(0 + boardSize.width - 1);
         cornerIndex.push_back(0 + boardSize.width * (boardSize.height-1));
@@ -700,25 +701,6 @@ int main( int argc, char** argv )
 
         if( key == 'u' && mode == CALIBRATED )
             undistortImage = !undistortImage;
-
-        // if( capture.isOpened() && key == 'g' )
-        // {
-        //     mode = CAPTURING;
-        //     imagePoints.clear();
-        // }
-
-        // if( mode == CAPTURING && imagePoints.size() >= (unsigned)nframes )
-        // {
-        //     if( runAndSave(outputFilename, imagePoints, imageSize,
-        //                boardSize, pattern, squareSize, aspectRatio,
-        //                flags, cameraMatrix, distCoeffs,
-        //                writeExtrinsics, writePoints))
-        //         mode = CALIBRATED;
-        //     else
-        //         mode = DETECTION;
-        //     if( !capture.isOpened() )
-        //         break;
-        // }
     }
     return 0;
 }
