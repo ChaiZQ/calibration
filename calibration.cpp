@@ -260,16 +260,108 @@ static bool readStringList( const string& filename, vector<string>& l )
         l.push_back((string)*it);
     return true;
 }
-void modifyExtrinsics(vector<cv::Mat> rvec,vector<cv::Mat> tvec,vector<int> index)
-{
 
+void homoTrans(Mat translation, Mat rotation, Mat& homo)
+{   int i,j;
+    Mat temp(Size(1,3),CV_64FC1);
+    if(rotation.cols == 1)
+    {   
+        Rodrigues(rotation,temp);
+    }
+    else temp = rotation;
+    for(i = 0; i  < 3 ;i ++)
+    {   
+        for(j = 0; j  <3 ;j ++)
+        {
+            homo.at<double>(i,j) = temp.at<double>(i,j);
+        }
+    }
+    homo.at<double>(0,3) = translation.at<double>(0);
+    homo.at<double>(1,3) = translation.at<double>(1);
+    homo.at<double>(2,3) = translation.at<double>(2);
+    homo.at<double>(3,0) = 0;
+    homo.at<double>(3,1) = 0;
+    homo.at<double>(3,2) = 0;
+    homo.at<double>(3,3) = 1;
+}
+
+void homo2vector(Mat& translation, Mat& rotation, const Mat homo)
+{   int i,j;
+    Mat temp = (Mat_<double>(3,3) << 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    for(i = 0; i  < 3 ;i ++)
+    {   
+        for(j = 0; j  < 3 ;j ++)
+        {
+            temp.at<double>(i,j)  = homo.at<double>(i,j);
+        }
+    }
+    Rodrigues(temp, rotation);
+    translation.at<double>(0) = homo.at<double>(0,3);
+    translation.at<double>(1) = homo.at<double>(1,3);
+    translation.at<double>(2) = homo.at<double>(2,3);
+}
+
+Mat ex_matrix(Mat rotation, Mat translation, int originIndex)
+{
+    Mat homo = (Mat_<double>(4,4) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0,0,0,0); //返回齐次变换矩阵
+    Mat t1 = (Mat_<double>(4,4) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0,0,0,0);
+    Mat t2 = (Mat_<double>(4,4) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0,0,0,0);
+    Mat t3 = (Mat_<double>(4,4) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0,0,0,0);
+    Mat rot1 = (Mat_<double>(3,1) << 0, 0, -CV_PI /2);
+    Mat rot2 = (Mat_<double>(3,1) << 0, 0, CV_PI /2);
+    Mat rot3 = (Mat_<double>(3,1) << 0, 0, CV_PI );
+    Mat translation1 = (Mat_<double>(3,1) << 0, 200, 0);
+    Mat translation2 = (Mat_<double>(3,1) << 200, 0, 0);
+    Mat translation3 = (Mat_<double>(3,1) << 200, 200, 0);
+
+    homoTrans(translation1,rot1,t1);
+    homoTrans(translation2,rot2,t2);
+    homoTrans(translation3,rot3,t3);
+    homoTrans(translation,rotation,homo);
+
+    switch(originIndex)
+    {   case 0:   break;
+        case 1:  
+            {
+               homo = homo * t1;break;           
+            };
+        case 2:  
+            {
+                homo = homo * t2;break;          
+            };
+        case 3:  
+            {
+                homo = homo * t3;break;          
+            };
+        default:;
+    };
+    return homo;
+}
+
+void modifyExtrinsics(vector<cv::Mat>& rvec,vector<cv::Mat>& tvec,vector<int> index)
+{
+    // for (int ImageNum = 0;ImageNum < NumOfimage - failedIndex.size() ;ImageNum++)
+    //  {
+    //     /*if(find(ImageNum,failedIndex ))
+    //         continue;*/
+
+    //     Mat ex_rot = (Mat_<double>(3,1) << 0, 0, 0);  //转换后的外参矩阵，旋转部分
+    //     Mat ex_tr = (Mat_<double>(3,1) << 0, 0, 0);   //转换后的外参矩阵，平移部分
+
+    //     homo2vector(ex_tr, ex_rot ,ex_matrix(cameraParams.rotations[ImageNum],cameraParams.translations[ImageNum],origin[ImageNum]));
+    
+    //     //转换外参数矩阵
+    //     cameraParams.rotations[ImageNum] = ex_rot;
+    //     cameraParams.translations[ImageNum] = ex_tr;
+        
+    //  }
 }
 
 static bool runAndSave(const string& outputFilename,
                 const vector<vector<Point2f> >& imagePoints,
                 Size imageSize, Size boardSize, Pattern patternType, float squareSize,
                 float aspectRatio, int flags, Mat& cameraMatrix,
-                Mat& distCoeffs, bool writeExtrinsics, bool writePoints )
+                Mat& distCoeffs, bool writeExtrinsics, bool writePoints,vector<int> cornerIndex)
 {
     vector<Mat> rvecs, tvecs;
     vector<float> reprojErrs;
@@ -278,6 +370,7 @@ static bool runAndSave(const string& outputFilename,
     bool ok = runCalibration(imagePoints, imageSize, boardSize, patternType, squareSize,
                    aspectRatio, flags, cameraMatrix, distCoeffs,
                    rvecs, tvecs, reprojErrs, totalAvgErr);
+    cout << "corner index size: " << cornerIndex.size() << endl;
     printf("%s. avg reprojection error = %.2f\n",
            ok ? "Calibration succeeded" : "Calibration failed",
            totalAvgErr);
@@ -477,46 +570,45 @@ int main( int argc, char** argv )
     {
         if( !videofile && readStringList(inputFilename, imageList) )
             mode = CAPTURING;
-        else
-            capture.open(inputFilename);
+        else{
+            cout << "fail to read image list!" << endl;
+            exit(1);
+        }
     }
-    else
-        capture.open(cameraId);
-
-    if( !capture.isOpened() && imageList.empty() )
-        return fprintf( stderr, "Could not initialize video (%d) capture\n",cameraId ), -2;
+    else{
+        cout << "no input file name!" << endl;
+        exit(1);
+    }
 
     if( !imageList.empty() )
         nframes = (int)imageList.size();
 
-    if( capture.isOpened() )
-        printf( "%s", liveCaptureHelp );
-
     namedWindow( "Image View", 1 );
 
+    vector<int> closestIndexVec;
     for(i = 0;;i++)
     {
         Mat view, viewGray;
         bool blink = false;
 
-        if( capture.isOpened() )
-        {
-            Mat view0;
-            capture >> view0;
-            view0.copyTo(view);
-        }
-        else if( i < (int)imageList.size() )
+        if( i < (int)imageList.size() )
             view = imread(imageList[i], 1);
-        if(!view.data)
+        if(!view.data)   //if all image corners have been detected, run calibration and print failed image index
         {
-            if( imagePoints.size() > 0 )
+            if( imagePoints.size() > 0 ){
                 runAndSave(outputFilename, imagePoints, imageSize,
                            boardSize, pattern, squareSize, aspectRatio,
                            flags, cameraMatrix, distCoeffs,
-                           writeExtrinsics, writePoints);
-            for(auto fi:failedIndex){
+                           writeExtrinsics, writePoints,closestIndexVec);
+            }
+            cout << "failed image index:" << endl;
+            for(int fi:failedIndex){
             	cout << fi << endl;
             }
+            cout << "closest corner index:" << endl;
+            for(int k:closestIndexVec)
+                cout << k << " ";
+            cout << '\n';
             break;
         }
         else{
@@ -549,7 +641,7 @@ int main( int argc, char** argv )
         if(found)
             drawChessboardCorners( view, boardSize, Mat(pointbuf), found );
         else{
-        	failedIndex.push_back(currentIndex);
+        	failedIndex.push_back(currentIndex);   //<<<---------------------------------------------------
         }
         string msg = mode == CAPTURING ? "100/100" :
             mode == CALIBRATED ? "Calibrated" : "Press 'g' to start";
@@ -567,9 +659,6 @@ int main( int argc, char** argv )
 
         putText( view, msg, textOrigin, 1, 1,
                  mode != CALIBRATED ? Scalar(0,0,255) : Scalar(0,255,0));
-
-        if( blink )
-            bitwise_not(view, view);
 
         if( mode == CALIBRATED && undistortImage )
         {
@@ -597,6 +686,7 @@ int main( int argc, char** argv )
         	cout << "original  " << pointbuf[0] << endl;
         	cout << "modified  " << o.p << endl;
         	cout << "closest index  " << closestIndex << endl;
+            closestIndexVec.push_back(closestIndex);
         }
         else{
         	cout << "failed to detect corners" << endl;
@@ -611,24 +701,24 @@ int main( int argc, char** argv )
         if( key == 'u' && mode == CALIBRATED )
             undistortImage = !undistortImage;
 
-        if( capture.isOpened() && key == 'g' )
-        {
-            mode = CAPTURING;
-            imagePoints.clear();
-        }
+        // if( capture.isOpened() && key == 'g' )
+        // {
+        //     mode = CAPTURING;
+        //     imagePoints.clear();
+        // }
 
-        if( mode == CAPTURING && imagePoints.size() >= (unsigned)nframes )
-        {
-            if( runAndSave(outputFilename, imagePoints, imageSize,
-                       boardSize, pattern, squareSize, aspectRatio,
-                       flags, cameraMatrix, distCoeffs,
-                       writeExtrinsics, writePoints))
-                mode = CALIBRATED;
-            else
-                mode = DETECTION;
-            if( !capture.isOpened() )
-                break;
-        }
+        // if( mode == CAPTURING && imagePoints.size() >= (unsigned)nframes )
+        // {
+        //     if( runAndSave(outputFilename, imagePoints, imageSize,
+        //                boardSize, pattern, squareSize, aspectRatio,
+        //                flags, cameraMatrix, distCoeffs,
+        //                writeExtrinsics, writePoints))
+        //         mode = CALIBRATED;
+        //     else
+        //         mode = DETECTION;
+        //     if( !capture.isOpened() )
+        //         break;
+        // }
     }
     return 0;
 }
