@@ -1,7 +1,4 @@
-#include "opencv2/core/core.hpp"
-#include "opencv2/imgproc/imgproc.hpp"
-#include "opencv2/calib3d/calib3d.hpp"
-#include "opencv2/highgui/highgui.hpp"
+#include <opencv2/opencv.hpp>
 
 #include <cctype>
 #include <stdio.h>
@@ -35,15 +32,6 @@ const char * usage =
 "</images>\n"
 "</opencv_storage>\n";
 
-
-
-
-const char* liveCaptureHelp =
-    "When the live video from camera is used as input, the following hot-keys may be used:\n"
-        "  <ESC>, 'q' - quit the program\n"
-        "  'g' - start capturing images\n"
-        "  'u' - switch undistortion on/off\n";
-
 static void help()
 {
     printf( "This is a camera calibration sample.\n"
@@ -74,7 +62,6 @@ static void help()
         "                              # if input_data not specified, a live view from the camera is used\n"
         "\n" );
     printf("\n%s",usage);
-    printf( "\n%s", liveCaptureHelp );
 }
 
 enum { DETECTION = 0, CAPTURING = 1, CALIBRATED = 2 };
