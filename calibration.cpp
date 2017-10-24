@@ -374,6 +374,7 @@ static bool runAndSave(const string& outputFilename,
     cout << "corner index size:  " << cornerIndex.size() << endl;
     cout << "board size:  " << boardSize.width << "      " << boardSize.height << endl;
     cout << "squareSize:  " << squareSize << endl;
+
     modifyExtrinsics(rvecs,tvecs,cornerIndex,squareSize,boardSize.width,boardSize.height);
 
     printf("%s. avg reprojection error = %.2f\n",
@@ -390,7 +391,7 @@ static bool runAndSave(const string& outputFilename,
                          writePoints ? imagePoints : vector<vector<Point2f> >(),
                          totalAvgErr );
     return ok;
-}
+};
 struct Origin
 {
 	cv::Mat img;
@@ -459,7 +460,7 @@ int main( int argc, char** argv )
     const char* inputFilename = 0;
 
     int i, nframes = 10;
-    bool writeExtrinsics = true, writePoints = true;
+    bool writeExtrinsics = true, writePoints = false;
     bool undistortImage = false;
     int flags = 0;
     VideoCapture capture;
@@ -473,6 +474,7 @@ int main( int argc, char** argv )
     vector<vector<Point2f> > imagePoints;
     vector<string> imageList;
     Pattern pattern = CHESSBOARD;
+
     vector<int> failedIndex;
     int currentIndex = 0;
 
@@ -481,7 +483,7 @@ int main( int argc, char** argv )
         help();
         return 0;
     }
-
+	//--------------------------------------read parameters-----------------------------------------------------------------
     for( i = 1; i < argc; i++ )
     {
         const char* s = argv[i];
@@ -598,7 +600,7 @@ int main( int argc, char** argv )
 
         if( i < (int)imageList.size() )
             view = imread(imageList[i], 1);
-        if(!view.data)   //if all image corners have been detected, run calibration and print failed image index
+        if(!view.data)   //<<--------------------------------------if all image corners have been detected, run calibration and print failed image index
         {
             if( imagePoints.size() > 0 ){
                 runAndSave(outputFilename, imagePoints, imageSize,
@@ -646,7 +648,7 @@ int main( int argc, char** argv )
         if(found)
             drawChessboardCorners( view, boardSize, Mat(pointbuf), found );
         else{
-        	failedIndex.push_back(currentIndex);   //<<<---------------------------------------------------
+        	failedIndex.push_back(currentIndex);   			//<<<---------------------------------------------------record failed 
         }
         string msg = mode == CAPTURING ? "100/100" :
             mode == CALIBRATED ? "Calibrated" : "Press 'g' to start";
@@ -670,7 +672,7 @@ int main( int argc, char** argv )
             Mat temp = view.clone();
             undistort(temp, view, cameraMatrix, distCoeffs);
         }
-        Origin o(view);
+        Origin o(view);										//<<<---------------------------------------------------get mouse position
         imshow("Image View", view);
         setMouseCallback("Image View",on_mouse,&o);
         cv::waitKey();
@@ -693,7 +695,6 @@ int main( int argc, char** argv )
         	cout << "failed to detect corners" << endl;
         }
 
-        
         int key = 0xff & waitKey(capture.isOpened() ? 50 : 500);
 
         if( (key & 255) == 27 )
