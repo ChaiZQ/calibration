@@ -281,6 +281,21 @@ void readRobotData(string robotFileName, vector<Mat>&RobotPose, vector<Mat>&Robo
 	}
 }
 
+void saveEyeHand(Mat rotationVec, Mat translationVec, int nFrames, vector<int> failedIndex)
+{
+	FileStorage fs("EyeHandParameter.yml",FileStorage::WRITE);
+	if (fs.isOpened())
+	{
+		time_t rawtime; 
+		time(&rawtime);
+		fs << "calibrationDate" << asctime(localtime(&rawtime));
+		fs << "failedIndex" << failedIndex;
+		fs << "Eye-hand translation" << translationVec;
+		fs << "Eye-hand rotation" << rotationVec;
+	};
+	fs.release();
+}
+
 void eyeHandCalibraion(string cameraFileName,string robotFileName,vector<int> failedIndex)
 {
 	FileStorage fs(cameraFileName,FileStorage::READ);
@@ -541,5 +556,7 @@ void eyeHandCalibraion(string cameraFileName,string robotFileName,vector<int> fa
 	
 	cout << EH_translation << endl;
 	cout << EH_rotation << endl;
-	cout << "Position:" << endl;
+
+	saveEyeHand(EH_rotation,EH_translation,NumOfImg,failedIndex);
+
 }
