@@ -1,5 +1,17 @@
 #include "../include/eyeHand.h"
 
+bool find(int i,std::vector<int> noise_)
+{   
+	int j = 0;
+	while(j < noise_.size() )
+	{
+		if( i == noise_[j])
+			return true;
+		j++;
+	}
+	return false;
+};
+
 /*----------------------------
  * 功能 : 矩阵拼接
  *----------------------------
@@ -24,21 +36,17 @@ Mat MatrixCombine(Mat upper, Mat lower)
 		if(i < (upper.rows))
 		{
 			double* data_upper = upper.ptr<double>(i);
-
 			for(int j = 0;j < c_new;j ++)
 			{   
 				dataCombined[j] = data_upper[j];
-
 			}
 		}
 		else 
 		{
 			double* data_lower = lower.ptr<double>(i-(upper.rows));
-
 			for(int j = 0;j < c_new;j ++)
 			{   
 				dataCombined[j] = data_lower [j];
-
 			}
 		}
 	}
@@ -209,7 +217,7 @@ Mat ransac(int numOfp,vector<double> samples, int k,double threshold_In, double&
    return Result;
 }
 
-void readRobotData(string robotFileName, vector<Mat>&RobotPose, vector<Mat>&RobotPosition,int nFrame)
+void readRobotData(string robotFileName, vector<Mat>&RobotPose, vector<Mat>&RobotPosition,int nFrame,vector<int> failedIndex)
 {
 	RobotPose.clear();
 	RobotPosition.clear();
@@ -221,6 +229,11 @@ void readRobotData(string robotFileName, vector<Mat>&RobotPose, vector<Mat>&Robo
 	int valid_pose = 0;
 	while(fin.getline(str,LINE_LENGTH))
 	{   
+		if(find(valid_pose,failedIndex))
+		{
+			valid_pose ++;
+			continue;
+		}
 		Mat RobotPose_data(Size(1,3),CV_64FC1); 
 		Mat RobotPosition_data(Size(1,3),CV_64FC1); 
 		k = 2;
@@ -233,7 +246,7 @@ void readRobotData(string robotFileName, vector<Mat>&RobotPose, vector<Mat>&Robo
 			{  
 				buffer[k-2-poseLength] = str[k];
 				k++;
-				if(str[k] == ')')
+				if(str[k] == ']')
 					break;
 			}
 			poseLength = k-1;
@@ -262,12 +275,13 @@ void readRobotData(string robotFileName, vector<Mat>&RobotPose, vector<Mat>&Robo
 		RobotPosition.push_back(RobotPosition_data);
 		RobotPose.push_back(RobotPose_data);
 		delete[] pose;
-		if(RobotPose.size() == nFrame)
+		valid_pose ++;
+		if(RobotPose.size() == nFrame - failedIndex.size())
 			break;
 	}
 }
 
-void eyeHandCalibraion(string cameraFileName,string robotFileName)
+void eyeHandCalibraion(string cameraFileName,string robotFileName,vector<int> failedIndex)
 {
 	FileStorage fs(cameraFileName,FileStorage::READ);
 	int NumOfImg = 0;
@@ -303,10 +317,15 @@ void eyeHandCalibraion(string cameraFileName,string robotFileName)
 
 		cameraPosition.push_back(temp_position );
 		cameraPose.push_back(temp_pose);
+		cout << i << "  " << temp_pose << endl;
 	}
 
 	//// ----------------------read robot parameters----------------------------
-	readRobotData(robotFileName,RobotPose,RobotPosition,NumOfImg);
+	readRobotData(robotFileName,RobotPose,RobotPosition,NumOfImg,failedIndex);
+	cout << "robot position" << endl;
+	for(int i = 0; i < NumOfImg; i++){
+		cout << i << "   " << RobotPosition[i] << endl;
+	}
 
 	//// ----------------------求解手眼矩阵变量定义----------------------------
 	Mat RobotPose_1(Size(1,3),CV_64FC1);			 // i-1次机器人姿态，axis/angle
@@ -394,7 +413,6 @@ void eyeHandCalibraion(string cameraFileName,string robotFileName)
 						R_Left2 = RobotPose_Matrix2.t() * RobotPose_Matrix3;
 						R_Right1 = cameraPose_Matrix1 * cameraPose_Matrix2.t();
 						R_Right2 = cameraPose_Matrix2 * cameraPose_Matrix3.t();
-		
 
 						Rodrigues(R_Left1,R_Left_angle1);
 						Rodrigues(R_Left2,R_Left_angle2);
@@ -467,7 +485,6 @@ void eyeHandCalibraion(string cameraFileName,string robotFileName)
 						orientation_Result_Ry.push_back(EyeHand_AxisAngle.at<double>(1));
 						orientation_Result_Rz.push_back(EyeHand_AxisAngle.at<double>(2));
 
-
 						Mat L12(Size(3,3),CV_64FC1); 
 						Mat L23(Size(3,3),CV_64FC1); 
 						Mat R12(Size(3,3),CV_64FC1); 
@@ -493,8 +510,6 @@ void eyeHandCalibraion(string cameraFileName,string robotFileName)
 
 				     	Mat Result_(Size(1,3),CV_64FC1); 
 						solve(L_temp,R_temp,Result_,DECOMP_QR);  
-						//show(Result_);
-						
 						position_Result_x.push_back(Result_.at<double>(0));
 						position_Result_y.push_back(Result_.at<double>(1));
 						position_Result_z.push_back(Result_.at<double>(2));
@@ -527,12 +542,4 @@ void eyeHandCalibraion(string cameraFileName,string robotFileName)
 	cout << EH_translation << endl;
 	cout << EH_rotation << endl;
 	cout << "Position:" << endl;
-	cout << temp_X << endl;
-	cout << temp_Y << endl;
-	cout << temp_Z << endl;
-	cout << "Orientation:" << endl;
-	cout << temp_Rx << endl;
-	cout << temp_Ry << endl;
-	cout << temp_Rz << endl;
-
 }

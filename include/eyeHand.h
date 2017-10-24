@@ -7,8 +7,9 @@
 using namespace cv;
 using namespace std;
 
-namespace eyeHand{
-
+//namespace eyeHand{
+	bool find(int i,std::vector<int> noise_);
+	
 	Mat MatrixCombine(Mat upper, Mat lower);
 
 	double vec_norm(Mat a);
@@ -19,7 +20,7 @@ namespace eyeHand{
 
 	Mat ransac(int numOfp,vector<double> samples, int k,double threshold_In, double& average);
 
-	void readRobotData(string robotFileName, vector<Mat>&RobotPose, vector<Mat>&RobotPosition,int nFrame);
+	void readRobotData(string robotFileName, vector<Mat>&RobotPose, vector<Mat>&RobotPosition,int nFrame,vector<int> failedIndex);
 
 	void saveEyeHand(Mat eyehandTranslation, Mat eyehandRotation, int numSamples);
 
@@ -30,5 +31,5 @@ namespace eyeHand{
 		vector<Mat> cameraPosition,
 		vector<Mat> cameraPose,double Varify_X = 0.0,double Varify_Y = 0.0, double Varify_R = 200.0);
 
-	void eyeHandCalibraion(string cameraFileName,string robotFileName);
-}
+	void eyeHandCalibraion(string cameraFileName,string robotFileName,vector<int> failedIndex);
+//}

@@ -6,6 +6,8 @@
 #include <time.h>
 #include <iostream>
 
+#include "../include/eyeHand.h"
+
 using namespace cv;
 using namespace std;
 
@@ -439,9 +441,8 @@ int getClosestIndex(const vector<int>& cornerIndex,const vector<cv::Point2f>& po
 
 int main( int argc, char** argv )
 {
-    
     Size boardSize, imageSize;
-    float squareSize = 1.f, aspectRatio = 1.f;
+    float squareSize = 25.0, aspectRatio = 1.f;
     Mat cameraMatrix, distCoeffs;
     const char* outputFilename = "out_camera_data.yml";
     const char* inputFilename = 0;
@@ -635,7 +636,7 @@ int main( int argc, char** argv )
         if(found)
             drawChessboardCorners( view, boardSize, Mat(pointbuf), found );
         else{
-        	failedIndex.push_back(currentIndex);   			//<<<---------------------------------------------------record failed 
+        	failedIndex.push_back(currentIndex-1);   			//<<<---------------------------------------------------record failed 
         }
         string msg = mode == CAPTURING ? "100/100" :
             mode == CALIBRATED ? "Calibrated" : "Press 'g' to start";
@@ -690,5 +691,7 @@ int main( int argc, char** argv )
         if( key == 'u' && mode == CALIBRATED )
             undistortImage = !undistortImage;
     }
+    //------------------------start eye-hand calibration--------------------------------------------------------------
+    eyeHandCalibraion(outputFilename,"UR_Pose.txt",failedIndex); //(string)argv[4]
     return 0;
 }
