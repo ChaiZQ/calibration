@@ -1,0 +1,7 @@
+%YAML:1.0
+squareSize: 25.0
+boardWidth: 9
+boardHeight: 6
+robotFileName: robot_pose.txt
+
+ 

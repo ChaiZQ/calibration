@@ -7,7 +7,7 @@
 #include <iostream>
 
 #include "../include/eyeHand.h"
-
+#include "../include/config.h"
 using namespace cv;
 using namespace std;
 
@@ -441,11 +441,16 @@ int getClosestIndex(const vector<int>& cornerIndex,const vector<cv::Point2f>& po
 
 int main( int argc, char** argv )
 {
+    string paraFileName = argv[1];
+    Config::setParameterFile(paraFileName);
+
     Size boardSize, imageSize;
-    float squareSize = 25.0, aspectRatio = 1.f;
+    float squareSize = Config::get<float>("squareSize");//<<-----------------------------parameter
+    float aspectRatio = 1.f;   
     Mat cameraMatrix, distCoeffs;
     const char* outputFilename = "out_camera_data.yml";
     const char* inputFilename = 0;
+    inputFilename = argv[2];
 
     int i, nframes = 10;
     bool writeExtrinsics = true, writePoints = false;
@@ -471,95 +476,99 @@ int main( int argc, char** argv )
         help();
         return 0;
     }
+
 	//--------------------------------------read parameters-----------------------------------------------------------------
-    for( i = 1; i < argc; i++ )
-    {
-        const char* s = argv[i];
-        if( strcmp( s, "-w" ) == 0 )
-        {
-            if( sscanf( argv[++i], "%u", &boardSize.width ) != 1 || boardSize.width <= 0 )
-                return fprintf( stderr, "Invalid board width\n" ), -1;
-        }
-        else if( strcmp( s, "-h" ) == 0 )
-        {
-            if( sscanf( argv[++i], "%u", &boardSize.height ) != 1 || boardSize.height <= 0 )
-                return fprintf( stderr, "Invalid board height\n" ), -1;
-        }
-        else if( strcmp( s, "-pt" ) == 0 )
-        {
-            i++;
-            if( !strcmp( argv[i], "circles" ) )
-                pattern = CIRCLES_GRID;
-            else if( !strcmp( argv[i], "acircles" ) )
-                pattern = ASYMMETRIC_CIRCLES_GRID;
-            else if( !strcmp( argv[i], "chessboard" ) )
-                pattern = CHESSBOARD;
-            else
-                return fprintf( stderr, "Invalid pattern type: must be chessboard or circles\n" ), -1;
-        }
-        else if( strcmp( s, "-s" ) == 0 )
-        {
-            if( sscanf( argv[++i], "%f", &squareSize ) != 1 || squareSize <= 0 )
-                return fprintf( stderr, "Invalid board square width\n" ), -1;
-        }
-        else if( strcmp( s, "-n" ) == 0 )
-        {
-            if( sscanf( argv[++i], "%u", &nframes ) != 1 || nframes <= 3 )
-                return printf("Invalid number of images\n" ), -1;
-        }
-        else if( strcmp( s, "-a" ) == 0 )
-        {
-            if( sscanf( argv[++i], "%f", &aspectRatio ) != 1 || aspectRatio <= 0 )
-                return printf("Invalid aspect ratio\n" ), -1;
-            flags |= CV_CALIB_FIX_ASPECT_RATIO;
-        }
-        else if( strcmp( s, "-d" ) == 0 )
-        {
-            if( sscanf( argv[++i], "%u", &delay ) != 1 || delay <= 0 )
-                return printf("Invalid delay\n" ), -1;
-        }
-        else if( strcmp( s, "-op" ) == 0 )
-        {
-            writePoints = true;
-        }
-        else if( strcmp( s, "-oe" ) == 0 )
-        {
-            writeExtrinsics = true;
-        }
-        else if( strcmp( s, "-zt" ) == 0 )
-        {
-            flags |= CV_CALIB_ZERO_TANGENT_DIST;
-        }
-        else if( strcmp( s, "-p" ) == 0 )
-        {
-            flags |= CV_CALIB_FIX_PRINCIPAL_POINT;
-        }
-        else if( strcmp( s, "-v" ) == 0 )
-        {
-            flipVertical = true;
-        }
-        else if( strcmp( s, "-V" ) == 0 )
-        {
-            videofile = true;
-        }
-        else if( strcmp( s, "-o" ) == 0 )
-        {
-            outputFilename = argv[++i];
-        }
-        else if( strcmp( s, "-su" ) == 0 )
-        {
-            showUndistorted = true;
-        }
-        else if( s[0] != '-' )
-        {
-            if( isdigit(s[0]) )
-                sscanf(s, "%d", &cameraId);
-            else
-                inputFilename = s;
-        }
-        else
-            return fprintf( stderr, "Unknown option %s", s ), -1;
-    }
+    boardSize.width = Config::get<int>("boardWidth");
+    boardSize.height = Config::get<int>("boardHeight");
+
+    // for( i = 1; i < argc; i++ )
+    // {
+    //     const char* s = argv[i];
+    //     if( strcmp( s, "-w" ) == 0 )
+    //     {
+    //         if( sscanf( argv[++i], "%u", &boardSize.width ) != 1 || boardSize.width <= 0 )
+    //             return fprintf( stderr, "Invalid board width\n" ), -1;
+    //     }
+    //     else if( strcmp( s, "-h" ) == 0 )
+    //     {
+    //         if( sscanf( argv[++i], "%u", &boardSize.height ) != 1 || boardSize.height <= 0 )
+    //             return fprintf( stderr, "Invalid board height\n" ), -1;
+    //     }
+    //     else if( strcmp( s, "-pt" ) == 0 )
+    //     {
+    //         i++;
+    //         if( !strcmp( argv[i], "circles" ) )
+    //             pattern = CIRCLES_GRID;
+    //         else if( !strcmp( argv[i], "acircles" ) )
+    //             pattern = ASYMMETRIC_CIRCLES_GRID;
+    //         else if( !strcmp( argv[i], "chessboard" ) )
+    //             pattern = CHESSBOARD;
+    //         else
+    //             return fprintf( stderr, "Invalid pattern type: must be chessboard or circles\n" ), -1;
+    //     }
+    //     else if( strcmp( s, "-s" ) == 0 )
+    //     {
+    //         if( sscanf( argv[++i], "%f", &squareSize ) != 1 || squareSize <= 0 )
+    //             return fprintf( stderr, "Invalid board square width\n" ), -1;
+    //     }
+    //     else if( strcmp( s, "-n" ) == 0 )
+    //     {
+    //         if( sscanf( argv[++i], "%u", &nframes ) != 1 || nframes <= 3 )
+    //             return printf("Invalid number of images\n" ), -1;
+    //     }
+    //     else if( strcmp( s, "-a" ) == 0 )
+    //     {
+    //         if( sscanf( argv[++i], "%f", &aspectRatio ) != 1 || aspectRatio <= 0 )
+    //             return printf("Invalid aspect ratio\n" ), -1;
+    //         flags |= CV_CALIB_FIX_ASPECT_RATIO;
+    //     }
+    //     else if( strcmp( s, "-d" ) == 0 )
+    //     {
+    //         if( sscanf( argv[++i], "%u", &delay ) != 1 || delay <= 0 )
+    //             return printf("Invalid delay\n" ), -1;
+    //     }
+    //     else if( strcmp( s, "-op" ) == 0 )
+    //     {
+    //         writePoints = true;
+    //     }
+    //     else if( strcmp( s, "-oe" ) == 0 )
+    //     {
+    //         writeExtrinsics = true;
+    //     }
+    //     else if( strcmp( s, "-zt" ) == 0 )
+    //     {
+    //         flags |= CV_CALIB_ZERO_TANGENT_DIST;
+    //     }
+    //     else if( strcmp( s, "-p" ) == 0 )
+    //     {
+    //         flags |= CV_CALIB_FIX_PRINCIPAL_POINT;
+    //     }
+    //     else if( strcmp( s, "-v" ) == 0 )
+    //     {
+    //         flipVertical = true;
+    //     }
+    //     else if( strcmp( s, "-V" ) == 0 )
+    //     {
+    //         videofile = true;
+    //     }
+    //     else if( strcmp( s, "-o" ) == 0 )
+    //     {
+    //         outputFilename = argv[++i];
+    //     }
+    //     else if( strcmp( s, "-su" ) == 0 )
+    //     {
+    //         showUndistorted = true;
+    //     }
+    //     else if( s[0] != '-' )
+    //     {
+    //         if( isdigit(s[0]) )
+    //             sscanf(s, "%d", &cameraId);
+    //         else
+    //             inputFilename = s;
+    //     }
+    //     else
+    //         return fprintf( stderr, "Unknown option %s", s ), -1;
+    // }
 
     if( inputFilename )
     {
@@ -691,7 +700,8 @@ int main( int argc, char** argv )
         if( key == 'u' && mode == CALIBRATED )
             undistortImage = !undistortImage;
     }
+    cout << Config::get<string>("robotFileName") << endl;
     //------------------------start eye-hand calibration--------------------------------------------------------------
-    eyeHandCalibraion(outputFilename,"UR_Pose.txt",failedIndex); //(string)argv[4]
+    eyeHandCalibraion(outputFilename,"robot_pose.txt",failedIndex); //(string)argv[4]
     return 0;
 }

@@ -222,7 +222,7 @@ void readRobotData(string robotFileName, vector<Mat>&RobotPose, vector<Mat>&Robo
 	RobotPose.clear();
 	RobotPosition.clear();
 	ifstream fin(robotFileName); 
-	const int LINE_LENGTH = 100; 
+	const int LINE_LENGTH = 10000; 
 	char str[LINE_LENGTH];  
 	int k = 2;					//读取起始地址  p and ( occupies the 1st and 2nd places
 	int poseLength = 0;
@@ -241,12 +241,12 @@ void readRobotData(string robotFileName, vector<Mat>&RobotPose, vector<Mat>&Robo
 		double* pose = new double[6];    //位姿数组
 		for(int i = 0;i < 6; i++ )
 		{	
-			char buffer[100];
+			char buffer[10000];
 			while(str[k] != ',')
 			{  
 				buffer[k-2-poseLength] = str[k];
 				k++;
-				if(str[k] == ']')
+				if(str[k] == ')')
 					break;
 			}
 			poseLength = k-1;
@@ -332,12 +332,13 @@ void eyeHandCalibraion(string cameraFileName,string robotFileName,vector<int> fa
 
 		cameraPosition.push_back(temp_position );
 		cameraPose.push_back(temp_pose);
-		cout << i << "  " << temp_pose << endl;
+		//cout << i << "  " << temp_pose << endl;
 	}
 
 	//// ----------------------read robot parameters----------------------------
 	readRobotData(robotFileName,RobotPose,RobotPosition,NumOfImg,failedIndex);
 	cout << "robot position" << endl;
+	cout << RobotPosition.size() << endl;
 	for(int i = 0; i < NumOfImg; i++){
 		cout << i << "   " << RobotPosition[i] << endl;
 	}

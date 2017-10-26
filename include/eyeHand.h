@@ -22,7 +22,7 @@ using namespace std;
 
 	void readRobotData(string robotFileName, vector<Mat>&RobotPose, vector<Mat>&RobotPosition,int nFrame,vector<int> failedIndex);
 
-	void saveEyeHand(Mat eyehandTranslation, Mat eyehandRotation, int numSamples);
+	void saveEyeHand(Mat eyehandTranslation, Mat eyehandRotation,vector<int> failedIndex);
 
 	void varify(Mat EH_translation, 
 		Mat EyeHandRotation,
