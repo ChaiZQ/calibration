@@ -296,6 +296,236 @@ void saveEyeHand(Mat rotationVec, Mat translationVec, int nFrames, vector<int> f
 	fs.release();
 }
 
+void homoTrans(Mat translation, Mat rotation, Mat& homo)
+{   int i,j;
+    Mat temp(Size(1,3),CV_64FC1);
+    if(rotation.cols == 1)
+    {   
+        Rodrigues(rotation,temp);
+    }
+    else temp = rotation;
+    for(i = 0; i  < 3 ;i ++)
+    {   
+        for(j = 0; j  <3 ;j ++)
+        {
+            homo.at<double>(i,j) = temp.at<double>(i,j);
+        }
+    }
+    homo.at<double>(0,3) = translation.at<double>(0);
+    homo.at<double>(1,3) = translation.at<double>(1);
+    homo.at<double>(2,3) = translation.at<double>(2);
+    homo.at<double>(3,0) = 0;
+    homo.at<double>(3,1) = 0;
+    homo.at<double>(3,2) = 0;
+    homo.at<double>(3,3) = 1;
+}
+
+void homo2vector(Mat& translation, Mat& rotation, const Mat homo)
+{   int i,j;
+    Mat temp = (Mat_<double>(3,3) << 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    for(i = 0; i  < 3 ;i ++)
+    {   
+        for(j = 0; j  < 3 ;j ++)
+        {
+            temp.at<double>(i,j)  = homo.at<double>(i,j);
+        }
+    }
+    Rodrigues(temp, rotation);
+    translation.at<double>(0) = homo.at<double>(0,3);
+    translation.at<double>(1) = homo.at<double>(1,3);
+    translation.at<double>(2) = homo.at<double>(2,3);
+}
+
+////get extrinsic para for camera
+/// @param  rotation        original rotation    vec 3*1
+/// @param  translation     original translation vec 3*1
+/// @param  originIndex     index of origin relative to the true fixed origin
+/// @param  chessboardSize  size of chessboard  mm
+/// @param  w               width of chessboard  
+/// @param  h               height of chessboard  
+Mat ex_matrix(Mat rotation, Mat translation, int originIndex,float chessboardSize,int w,int h)
+{
+    Mat homo = (Mat_<double>(4,4) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0,0,0,0); //返回齐次变换矩阵
+    Mat t1 = (Mat_<double>(4,4) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0,0,0,0);
+    Mat t2 = (Mat_<double>(4,4) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0,0,0,0);
+    Mat t3 = (Mat_<double>(4,4) << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0,0,0,0);
+    Mat rot1 = (Mat_<double>(3,1) << 0, 0, -CV_PI /2);
+    Mat rot2 = (Mat_<double>(3,1) << 0, 0, CV_PI /2);
+    Mat rot3 = (Mat_<double>(3,1) << 0, 0, CV_PI );
+    Mat translation1 = (Mat_<double>(3,1) << (w-1)*chessboardSize, 0, 0);  //
+    Mat translation2 = (Mat_<double>(3,1) << 0, (h-1)*chessboardSize, 0);
+    Mat translation3 = (Mat_<double>(3,1) << (w-1)*chessboardSize, (h-1)*chessboardSize, 0);
+
+    homoTrans(translation1,rot1,t1);
+    homoTrans(translation2,rot2,t2);
+    homoTrans(translation3,rot3,t3);
+    homoTrans(translation,rotation,homo);
+
+    switch(originIndex)
+    {   case 0:   break;
+        case 1:  
+            {
+               homo = homo * t1;break;           
+            };
+        case 2:  
+            {
+                homo = homo * t2;break;          
+            };
+        case 3:  
+            {
+                homo = homo * t3;break;          
+            };
+        default:;
+    };
+    return homo;
+}
+
+
+void varify(Mat EH_translation, Mat EyeHandRotation,vector<Mat> RobotPosition,vector<Mat> RobotPose, 
+			vector<Mat> cameraPosition,vector<Mat> cameraPose,
+			double Varify_X = 0.0,double Varify_Y = 0.0, double Varify_R = 200.0)
+{
+	//-----------------------------------------------------------------------------------------
+			// 验证照射位姿生成，变量定义
+			//-----------------------------------------------------------------------------------------
+			Mat EHMatrix(Size(4,4),CV_64FC1);        //手眼矩阵 4*4
+			Mat ROBOTMatrix(Size(4,4),CV_64FC1);	 //机器人末端相对于base矩阵 4*4
+			Mat EXTRMatrix(Size(4,4),CV_64FC1);		 //相机外参数矩阵 4*4
+			Mat incline(Size(4,4),CV_64FC1);         //相机坐标系相对标定板变换
+			Mat incline_180(Size(4,4),CV_64FC1);     //相机坐标系相对标定板，二次变换，绕z轴转180度，防止撞到相机
+			Mat point_pattern(Size(4,4),CV_64FC1);   //标定板坐标系某点 相对 标定板原点坐标
+			Mat point_world(Size(1,4),CV_64FC1);     //标定板坐标系某点  转换至机器人世界坐标系 齐次坐标
+			Mat vali_pose(Size(4,4),CV_64FC1);		 //为使验证照射至某点，机器人末端位姿
+	
+			vector<double> vali_Result_x;
+			vector<double> vali_Result_y;
+			vector<double> vali_Result_z;
+			vector<double> vali_Result_rx;
+			vector<double> vali_Result_ry;
+			vector<double> vali_Result_rz;
+
+			//====================验证照射点坐标=============================
+			point_pattern.at<double>(0,3) = Varify_X;
+			point_pattern.at<double>(1,3) = Varify_Y;
+			point_pattern.at<double>(2,3) = 0;
+			point_pattern.at<double>(3,3) = 1;
+
+			point_pattern.at<double>(0,2) = 0;
+			point_pattern.at<double>(1,2) = 0;
+			point_pattern.at<double>(2,2) = 1;
+			point_pattern.at<double>(3,2) = 0;
+
+			point_pattern.at<double>(0,1) = 0;
+			point_pattern.at<double>(1,1) = 1;
+			point_pattern.at<double>(2,1) = 0;
+			point_pattern.at<double>(3,1) = 0;
+
+			point_pattern.at<double>(0,0) = 1;
+			point_pattern.at<double>(1,0) = 0;
+			point_pattern.at<double>(2,0) = 0;
+			point_pattern.at<double>(3,0) = 0;
+
+			cout << point_pattern << endl;
+			//====================验证照射姿态变量=============================
+			double alpha = -CV_PI / 3.0;   
+			double beta = CV_PI / (3.0);
+			double r = Varify_R;
+
+			//验证姿态矩阵
+			incline.at<double>(0,0) = -sin(beta);
+			incline.at<double>(0,1) = cos(beta) * sin(alpha);
+			incline.at<double>(0,2) = -cos(alpha) * cos(beta);
+			incline.at<double>(0,3) = r * cos(alpha) * cos(beta);
+
+			incline.at<double>(1,0) = cos(beta);
+			incline.at<double>(1,1) = sin(alpha) * sin(beta);
+			incline.at<double>(1,2) = -cos(alpha) * sin(beta);
+			incline.at<double>(1,3) = r * cos(alpha) * sin(beta);
+
+			incline.at<double>(2,0) = 0;
+			incline.at<double>(2,1) = -cos(alpha);
+			incline.at<double>(2,2) = -sin(alpha);
+			incline.at<double>(2,3) = r * sin(alpha);
+
+			incline.at<double>(3,0) = 0;
+			incline.at<double>(3,1) = 0;
+			incline.at<double>(3,2) = 0;
+			incline.at<double>(3,3) = 1;
+
+			//二次变换矩阵
+			incline_180.at<double>(0,0) = -1;
+			incline_180.at<double>(0,1) = 0;
+			incline_180.at<double>(0,2) = 0;
+			incline_180.at<double>(0,3) = 0;
+
+			incline_180.at<double>(1,0) = 0;
+			incline_180.at<double>(1,1) = -1;
+			incline_180.at<double>(1,2) = 0;
+			incline_180.at<double>(1,3) = 0;
+
+			incline_180.at<double>(2,0) = 0;
+			incline_180.at<double>(2,1) = 0;
+			incline_180.at<double>(2,2) = 1;
+			incline_180.at<double>(2,3) = 0;
+
+			incline_180.at<double>(3,0) = 0;
+			incline_180.at<double>(3,1) = 0;
+			incline_180.at<double>(3,2) = 0;
+			incline_180.at<double>(3,3) = 1;
+
+			vector<Mat> vali_position;				//为使验证照射至某点，机器人末端位置
+			vector<Mat> vali_rotation;				//为使验证照射至某点，机器人末端姿态
+
+			for(int i = 0;i < RobotPosition.size();i++ )
+			{
+				homoTrans(EH_translation,EyeHandRotation,EHMatrix);
+				homoTrans(RobotPosition[i],RobotPose[i],ROBOTMatrix);
+				homoTrans(cameraPosition[i],cameraPose[i],EXTRMatrix);
+
+				vali_pose = ROBOTMatrix * EHMatrix * EXTRMatrix * point_pattern * incline * incline_180 * EHMatrix.inv();   //相机光轴对准标定板某点，机器人所处位姿
+			//	point_world = ROBOTMatrix * EHMatrix * EXTRMatrix * point_pattern;
+
+				Mat vali_pose_rotation(Size(3,3),CV_64FC1); 
+				Mat vali_pose_rotation_axis(Size(1,3),CV_64FC1); 
+				for(int i = 0; i  < 3 ;i ++)
+				{	for(int j = 0; j  <3 ;j ++)
+				{
+					vali_pose_rotation.at<double>(i,j) = vali_pose.at<double>(i,j);
+				}
+				}
+				Rodrigues(vali_pose_rotation,vali_pose_rotation_axis);
+
+				vali_Result_x.push_back(vali_pose.at<double>(0,3));
+				vali_Result_y.push_back(vali_pose.at<double>(1,3));
+				vali_Result_z.push_back(vali_pose.at<double>(2,3));
+
+				vali_Result_rx.push_back(vali_pose_rotation_axis.at<double>(0));
+				vali_Result_ry.push_back(vali_pose_rotation_axis.at<double>(1));
+				vali_Result_rz.push_back(vali_pose_rotation_axis.at<double>(2));
+				cout << "valid_pose" << endl;
+				cout << vali_pose.at<double>(0,3) << "  " << vali_pose.at<double>(1,3) << "  " << vali_pose.at<double>(2,3) << endl;
+			}
+
+			//利用RANSAC剔除外点
+			double vX, vY, vZ,vRx,vRy,vRz;
+
+			Mat vali_x = ransac(vali_Result_x.size(),vali_Result_x,100,0.5,vX);
+			Mat vali_y = ransac(vali_Result_y.size(),vali_Result_y,100,0.5,vY);
+			Mat vali_z= ransac(vali_Result_z.size(),vali_Result_z,100,0.5,vZ);
+			Mat vali_Rx = ransac(vali_Result_rx.size(),vali_Result_rx,100,0.01,vRx);
+			Mat vali_Ry = ransac(vali_Result_ry.size(),vali_Result_ry,100,0.01,vRy);
+			Mat vali_Rz = ransac(vali_Result_rz.size(),vali_Result_rz,100,0.01,vRz);
+
+			cout<<"Validation position:"<<endl;
+			cout<<vX<<endl;
+			cout<<vY<<endl;
+			cout<<vZ<<endl;
+			cout<<"Validation orientation:"<<endl;
+			cout<<vRx<<endl;
+			cout<<vRy<<endl;
+			cout<<vRz<<endl;
+}
+
 void eyeHandCalibraion(string cameraFileName,string robotFileName,vector<int> failedIndex)
 {
 	FileStorage fs(cameraFileName,FileStorage::READ);
@@ -559,5 +789,8 @@ void eyeHandCalibraion(string cameraFileName,string robotFileName,vector<int> fa
 	cout << EH_rotation << endl;
 
 	saveEyeHand(EH_rotation,EH_translation,NumOfImg,failedIndex);
+
+	varify(EH_translation, EH_rotation,RobotPosition,RobotPose, 
+			cameraPosition,cameraPose,25,25,400);
 
 }

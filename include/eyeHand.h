@@ -24,12 +24,18 @@ using namespace std;
 
 	void saveEyeHand(Mat eyehandTranslation, Mat eyehandRotation,vector<int> failedIndex);
 
+	void homoTrans(Mat translation, Mat rotation, Mat& homo);
+
+	void homo2vector(Mat& translation, Mat& rotation, const Mat homo);
+
+	Mat ex_matrix(Mat rotation, Mat translation, int originIndex,float chessboardSize,int w,int h);
+	
 	void varify(Mat EH_translation, 
 		Mat EyeHandRotation,
 		vector<Mat> RobotPosition,
 		vector<Mat> RobotPose, 
 		vector<Mat> cameraPosition,
-		vector<Mat> cameraPose,double Varify_X = 0.0,double Varify_Y = 0.0, double Varify_R = 200.0);
+		vector<Mat> cameraPose,double Varify_X,double Varify_Y, double Varify_R);
 
 	void eyeHandCalibraion(string cameraFileName,string robotFileName,vector<int> failedIndex);
 //}
